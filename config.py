@@ -12,10 +12,10 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        token = os.getenv("BOT_TOKEN", "8344847527:AAFJdbJKZi5JpgHAjBPPyDqVgyQTunsJSgE")
-        admin_raw = os.getenv("ADMIN_IDS", "7625438712")
+        token = os.getenv("BOT_TOKEN")
+        admin_raw = os.getenv("ADMIN_IDS")
         admin_ids = [int(value) for value in admin_raw.split(",") if value.strip()]
-        admin_phones_raw = os.getenv("ADMIN_PHONES", "89640062042")
+        admin_phones_raw = os.getenv("ADMIN_PHONES")
         admin_phones = [value.strip() for value in admin_phones_raw.split(",") if value.strip()]
         database_path = os.getenv("DATABASE_PATH", cls.database_path)
         return cls(
@@ -24,6 +24,7 @@ class Settings:
             admin_phones=admin_phones,
             database_path=database_path,
         )
+
 
 
 settings = Settings.from_env()
