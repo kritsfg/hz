@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 import os
 from typing import List
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения из .env файла
+load_dotenv()
 
 
 @dataclass

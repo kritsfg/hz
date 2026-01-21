@@ -2,22 +2,22 @@ import asyncio
 import logging
 import os
 import sys
-import random
 from datetime import datetime
 from typing import Dict, Optional
 
 # Добавьте путь для корректных импортов
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.client.default import DefaultBotProperties
 
-from bot import db
-from bot.config import settings
-from bot.keyboards import (
+import db
+from config import settings
+from keyboards import (
     ACTIVITY_CHOICES,
     CATEGORY_LABELS,
     RATING_MENU,
@@ -25,128 +25,10 @@ from bot.keyboards import (
     main_menu,
     approval_keyboard,
 )
-from bot.states import ActivityState, BroadcastState, RatingState, RegistrationState
+from states import ActivityState, BroadcastState, RatingState, RegistrationState
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-# ==================== ФУНКЦИЯ СОЗДАНИЯ БОТА С ПРОКСИ ====================
-async def create_bot_with_proxy(token: str) -> Bot:
-    """
-    Автоматически подбирает рабочий прокси-сервер за границей
-    для обхода блокировки Telegram в России
-    """
-    print("=" * 60)
-    print("🌍 ПОИСК РАБОЧЕГО ПРОКСИ-СЕРВЕРА ЗА ГРАНИЦЕЙ")
-    print("=" * 60)
-
-    # Список публичных прокси-серверов в разных странах
-    # Эти серверы находятся за пределами России и обходят блокировку
-    PROXY_SERVERS = [
-        # 🇺🇸 США
-        {"url": "socks5://45.77.56.114:9050", "country": "США", "city": "Нью-Йорк"},
-        {"url": "socks5://138.197.157.60:9050", "country": "США", "city": "Сан-Франциско"},
-        {"url": "socks5://209.97.150.167:9050", "country": "США", "city": "Чикаго"},
-
-        # 🇩🇪 Германия
-        {"url": "socks5://185.199.229.156:7492", "country": "Германия", "city": "Франкфурт"},
-        {"url": "socks5://188.166.216.198:9050", "country": "Германия", "city": "Берлин"},
-
-        # 🇳🇱 Нидерланды
-        {"url": "socks5://178.62.193.19:9050", "country": "Нидерланды", "city": "Амстердам"},
-
-        # 🇸🇬 Сингапур
-        {"url": "socks5://128.199.202.122:9050", "country": "Сингапур", "city": "Сингапур"},
-
-        # 🇯🇵 Япония
-        {"url": "socks5://45.32.234.150:9050", "country": "Япония", "city": "Токио"},
-
-        # 🇫🇷 Франция
-        {"url": "socks5://51.158.68.133:8811", "country": "Франция", "city": "Париж"},
-
-        # 🇬🇧 Великобритания
-        {"url": "socks5://51.15.122.122:9050", "country": "Великобритания", "city": "Лондон"},
-
-        # 🇨🇦 Канада
-        {"url": "socks5://159.203.87.129:9050", "country": "Канада", "city": "Торонто"},
-    ]
-
-    # Перемешиваем список для рандомизации
-    random.shuffle(PROXY_SERVERS)
-
-    bot_instance = None
-    working_proxy = None
-
-    for idx, proxy in enumerate(PROXY_SERVERS, 1):
-        try:
-            print(f"🔄 Попытка {idx}/{len(PROXY_SERVERS)}: {proxy['country']} ({proxy['city']})")
-
-            # Импортируем библиотеку для прокси
-            from aiohttp_socks import ProxyConnector
-            import aiohttp
-
-            # Создаем подключение через прокси
-            connector = ProxyConnector.from_url(proxy['url'])
-            session = aiohttp.ClientSession(connector=connector)
-
-            # Создаем бота с этой сессией
-            bot_instance = Bot(
-                token=token,
-                parse_mode=ParseMode.HTML,
-                session=session
-            )
-
-            # Тестируем подключение (быстрая проверка)
-            me = await bot_instance.get_me(request_timeout=15)
-
-            working_proxy = proxy
-            print(f"✅ УСПЕХ! Найден рабочий прокси в {proxy['country']}!")
-            print(f"   📡 Подключение через: {proxy['url']}")
-            print(f"   🤖 Бот: @{me.username} (ID: {me.id})")
-            print("=" * 60)
-
-            return bot_instance
-
-        except ImportError:
-            print("❌ Библиотека aiohttp-socks не установлена!")
-            print("   Установите: pip install aiohttp-socks")
-            break
-
-        except Exception as e:
-            error_msg = str(e)
-            if "timeout" in error_msg.lower():
-                print(f"   ⏰ Таймаут соединения")
-            elif "connection refused" in error_msg.lower():
-                print(f"   🔌 Соединение отклонено")
-            else:
-                print(f"   ❌ Ошибка: {error_msg[:50]}...")
-
-            # Закрываем сессию если была создана
-            if 'session' in locals():
-                await session.close()
-
-            continue
-
-    # Если ни один прокси не сработал
-    if bot_instance is None:
-        print("⚠️ ВНИМАНИЕ: Ни один прокси не сработал!")
-        print("   Пробуем прямое подключение (требуется VPN)...")
-        print("=" * 60)
-
-        # Пробуем создать бота без прокси (требуется VPN)
-        try:
-            bot_instance = Bot(token=token, parse_mode=ParseMode.HTML)
-            me = await bot_instance.get_me(request_timeout=15)
-            print(f"✅ Прямое подключение работает (VPN включен)")
-            print(f"   🤖 Бот: @{me.username}")
-            return bot_instance
-        except Exception as e:
-            print(f"❌ Прямое подключение тоже не работает: {e}")
-            print("   ВКЛЮЧИТЕ VPN и перезапустите бота!")
-            raise ConnectionError("Не удалось подключиться к Telegram API")
-
-    return bot_instance
 
 
 def ensure_data_dir() -> None:
@@ -735,13 +617,6 @@ async def unban_user(callback: CallbackQuery):
 
 
 async def main() -> None:
-    # Проверяем наличие библиотеки для прокси
-    try:
-        import aiohttp_socks
-        print("✅ Библиотека aiohttp-socks установлена")
-    except ImportError:
-        print("⚠️ Установите библиотеку для прокси: pip install aiohttp-socks")
-
     ensure_data_dir()
     db.init_db()
 
@@ -753,11 +628,15 @@ async def main() -> None:
     print("=" * 60)
 
     try:
-        # Создаем бота с автоматическим подбором прокси
-        bot = await create_bot_with_proxy(settings.bot_token)
-
-        # Пропускаем проверку вебхука (для России)
-        print("⏩ Пропускаем проверку вебхука (оптимизация для РФ)")
+        # Создаем бота
+        bot = Bot(
+            token=settings.bot_token,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+        )
+        
+        # Проверяем подключение
+        me = await bot.get_me()
+        print(f"✅ Бот подключен: @{me.username} (ID: {me.id})")
 
         print("=" * 60)
         print("✅ БОТ УСПЕШНО ЗАПУЩЕН!")
@@ -774,10 +653,9 @@ async def main() -> None:
     except Exception as e:
         print(f"\n❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
         print("\n🔧 РЕШЕНИЯ:")
-        print("1. ВКЛЮЧИТЕ VPN (обязательно для России)")
-        print("2. Проверьте токен бота в @BotFather")
-        print("3. Установите библиотеку: pip install aiohttp-socks")
-        print("4. Перезапустите бота")
+        print("1. Проверьте токен бота в @BotFather")
+        print("2. Проверьте подключение к интернету")
+        print("3. Перезапустите бота")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Iterable, List, Optional, Sequence, Tuple
 
-from bot.config import settings
+from config import settings
 
 
 @contextmanager
